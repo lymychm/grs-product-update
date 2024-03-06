@@ -1,0 +1,23 @@
+plugins {
+	id 'java'
+}
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+
+java {
+	sourceCompatibility = '11'
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	// Google
+	implementation "com.google.cloud:google-cloud-retail:2.38.0"
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
