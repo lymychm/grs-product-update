@@ -5,6 +5,7 @@ import com.google.cloud.retail.v2.Product;
 import com.google.cloud.retail.v2.ProductName;
 import com.google.cloud.retail.v2.ProductServiceClient;
 import com.google.cloud.retail.v2.UpdateProductRequest;
+import com.google.protobuf.FieldMask;
 
 public class ProductUpdate {
     public static final String ATTRIBUTE_TO_CHANGE = "${ATTRIBUTE_TO_CHANGE}";
@@ -22,6 +23,13 @@ public class ProductUpdate {
             //  - with io.grpc.StatusRuntimeException: INVALID_ARGUMENT: Unsupported path 'rating.average_rating' in 'product.retrievableFields'.
             updateAttempt1(productId, productServiceClient);
             updateAttempt2(productId, productServiceClient);
+
+            // Fails with: io.grpc.StatusRuntimeException: INVALID_ARGUMENT: Unsupported path 'rating.average_rating' in 'product.retrievableFields'.
+            updateAttempt3(productId, productServiceClient);
+
+            // Works after adding .addPaths(Product.getDescriptor().findFieldByNumber(Product.RETRIEVABLE_FIELDS_FIELD_NUMBER).getName())
+            // ¯\_(ツ)_/¯
+            updateAttempt4(productId, productServiceClient);
         }
     }
 
@@ -49,12 +57,58 @@ public class ProductUpdate {
         System.out.println(result);
     }
 
+    private static void updateAttempt3(String productId, ProductServiceClient productServiceClient) {
+        Product product = getProduct(productId);
+        UpdateProductRequest request = UpdateProductRequest.newBuilder()
+                .setProduct(product.toBuilder().setName(toProductName(productId).toString()))
+                .setAllowMissing(false)
+                .setUpdateMask(notWorkingFieldMask())
+                .build();
+        Product result = productServiceClient.updateProduct(request);
+        System.out.println(result);
+    }
+
+    private static void updateAttempt4(String productId, ProductServiceClient productServiceClient) {
+        Product product = getProduct(productId);
+        UpdateProductRequest request = UpdateProductRequest.newBuilder()
+                .setProduct(product.toBuilder().setName(toProductName(productId).toString()))
+                .setAllowMissing(false)
+                .setUpdateMask(workingFieldMask())
+                .build();
+        Product result = productServiceClient.updateProduct(request);
+        System.out.println(result);
+    }
+
+    private static Product getProduct(String productId) {
+        Product.Builder builder = Product.newBuilder();
+        builder.setId(productId);
+        builder.putAttributes(ATTRIBUTE_TO_CHANGE, CustomAttribute.newBuilder().addText(Boolean.FALSE.toString()).build());
+        return builder.setAvailability(Product.Availability.OUT_OF_STOCK).build();
+    }
+
     private static ProductName toProductName(String id) {
         return ProductName.newBuilder().setProduct(id)
                 .setCatalog(DEFAULT_CATALOG)
                 .setBranch(DEFAULT_BRANCH)
                 .setLocation(LOCATION)
                 .setProject(PROJECT)
+                .build();
+    }
+
+    private static FieldMask notWorkingFieldMask() {
+        return FieldMask
+                .newBuilder()
+                .addPaths("attributes." + ATTRIBUTE_TO_CHANGE)
+                .addPaths(Product.getDescriptor().findFieldByNumber(Product.AVAILABILITY_FIELD_NUMBER).getName())
+                .build();
+    }
+
+    private static FieldMask workingFieldMask() {
+        return FieldMask
+                .newBuilder()
+                .addPaths("attributes." + ATTRIBUTE_TO_CHANGE)
+                .addPaths(Product.getDescriptor().findFieldByNumber(Product.AVAILABILITY_FIELD_NUMBER).getName())
+                .addPaths(Product.getDescriptor().findFieldByNumber(Product.RETRIEVABLE_FIELDS_FIELD_NUMBER).getName())
                 .build();
     }
 }
